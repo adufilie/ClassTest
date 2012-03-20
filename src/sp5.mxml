@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+/*
+Weave (Web-based Analysis and Visualization Environment)
+Copyright (C) 2008-2011 University of Massachusetts Lowell
+
+This file is a part of Weave.
+
+Weave is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License, Version 3,
+as published by the Free Software Foundation.
+
+Weave is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Weave.  If not, see <http://www.gnu.org/licenses/>.
+*/
+-->
+<ui:DraggablePanel xmlns="weave.example.*" xmlns:mx="http://www.adobe.com/2006/mxml" xmlns:ui="weave.ui.*"
+				   implements="weave.api.ui.IVisTool">
+	
+	
+	<mx:Canvas width="100%" height="100%" id="canvas" mouseChildren="false"/>
+	<mx:Script>
+		<![CDATA[
+			import mx.utils.NameUtil;
+			
+			import weave.api.WeaveAPI;
+			import weave.api.data.IQualifiedKey;
+			import weave.api.getCallbackCollection;
+			import weave.api.registerLinkableChild;
+			import weave.api.ui.IVisTool;
+			import weave.compiler.StandardLib;
+			import weave.data.AttributeColumns.DynamicColumn;
+			import weave.data.StatisticsCache;
+			import weave.utils.ColumnUtils;
+			WeaveAPI.registerImplementation(IVisTool, sp5);
+			
+			public const xColumn:DynamicColumn = registerLinkableChild(this,new DynamicColumn());
+			public const yColumn:DynamicColumn = registerLinkableChild(this,new DynamicColumn());
+			
+			public const colorColumn:DynamicColumn = registerLinkableChild(this, new DynamicColumn());
+			
+			public const sizeColumn:DynamicColumn = registerLinkableChild(this,new DynamicColumn());
+			
+			override protected function childrenCreated():void
+			{
+				super.childrenCreated();
+				
+				getCallbackCollection(this).addImmediateCallback(this,invalidateDisplayList);
+				
+			}
+			
+
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
+			{
+				super.updateDisplayList.apply(this,arguments);
+				
+				var keys:Array = ColumnUtils.getAllKeys([xColumn,yColumn,colorColumn,sizeColumn]);
+				
+				if(!xColumn.internalColumn || !yColumn.internalColumn)
+					return;
+				
+				var yMin:Number = WeaveAPI.StatisticsCache.getMin(yColumn);
+				var yMax:Number = WeaveAPI.StatisticsCache.getMax(yColumn);
+				
+				var xMax:Number = WeaveAPI.StatisticsCache.getMax(xColumn);
+				var xMin:Number = WeaveAPI.StatisticsCache.getMin(xColumn);
+				
+				canvas.graphics.clear();
+				for each (var key:IQualifiedKey in keys)
+				{
+//					var plotX:Number = xColumn.getValueFromKey(key,Number);
+//					plotX = StandardLib.normalize(plotX,xMin,xMax);
+//					
+//					var plotY:Number = yColumn.getValueFromKey(key,Number);
+//					plotY = StandardLib.normalize(plotY,yMin,yMax);
+//					
+//					var colorValue:Number = colorColumn.getValueFromKey(key,Number);
+//					colorValue = StandardLib.normalize(
+					
+					
+					var plotX:Number = ColumnUtils.getNorm(xColumn,key);
+					var plotXtoScreen:Number =  StandardLib.scale(plotX,0,1,0,unscaledWidth);
+					
+					
+					var plotY:Number = ColumnUtils.getNorm(yColumn,key);
+					var plotYtoScreen:Number = StandardLib.scale(plotY,0,1,unscaledHeight,0);
+					
+					var color:Number = ColumnUtils.getNorm(colorColumn,key);
+					
+					var size:Number = ColumnUtils.getNorm(sizeColumn,key) * 10;
+					
+					color = StandardLib.interpolateColor(color,0xFF0000, 0x00FF00);
+					
+					canvas.graphics.lineStyle(1);					
+					canvas.graphics.beginFill(color);
+					if(isNaN(size))
+						size =5;
+					canvas.graphics.drawCircle(plotXtoScreen,plotYtoScreen,size);
+					canvas.graphics.endFill();
+					
+				}
+			}
+			
+			]]>
+	</mx:Script>
+
+</ui:DraggablePanel>

@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+/*
+    Weave (Web-based Analysis and Visualization Environment)
+    Copyright (C) 2008-2011 University of Massachusetts Lowell
+
+    This file is a part of Weave.
+
+    Weave is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License, Version 3,
+    as published by the Free Software Foundation.
+
+    Weave is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Weave.  If not, see <http://www.gnu.org/licenses/>.
+*/
+-->
+<ui:DraggablePanel xmlns="weave.example.*" xmlns:mx="http://www.adobe.com/2006/mxml" xmlns:ui="weave.ui.*"
+				   implements="weave.api.ui.IVisTool">
+
+	
+		<mx:Canvas width="100%" height="100%" id="canvas"/>
+	
+	<mx:Script>
+		<![CDATA[
+			import weave.api.WeaveAPI;
+			import weave.api.data.IQualifiedKey;
+			import weave.api.getCallbackCollection;
+			import weave.api.newLinkableChild;
+			import weave.api.ui.IVisTool;
+			import weave.compiler.StandardLib;
+			import weave.data.AttributeColumns.DynamicColumn;
+			import weave.utils.ColumnUtils;
+			WeaveAPI.registerImplementation(IVisTool, sp3);
+			
+			public const xData:DynamicColumn = newLinkableChild(this, DynamicColumn);
+			public const yData:DynamicColumn = newLinkableChild(this, DynamicColumn);
+			public const cData:DynamicColumn = newLinkableChild(this, DynamicColumn);
+			
+			override protected function childrenCreated():void
+			{
+				super.childrenCreated();
+				
+				getCallbackCollection(this).addImmediateCallback(this, invalidateDisplayList);
+			}
+			
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
+			{
+				super.updateDisplayList.apply(this, arguments);
+				
+				var keys:Array = ColumnUtils.getAllKeys([xData,yData,cData]);
+				var r:int = 5;
+				
+				var yMin:Number = WeaveAPI.StatisticsCache.getMin(yData);
+				var yMax:Number = WeaveAPI.StatisticsCache.getMax(yData);
+				
+				canvas.graphics.clear();
+					
+				for each (var key:IQualifiedKey in keys) 
+				{ 
+									
+					var xNorm:Number = ColumnUtils.getNorm(xData, key);
+					var xScreen:Number = StandardLib.scale(xNorm, 0, 1, 0, unscaledWidth);
+					
+					var y:Number = yData.getValueFromKey(key, Number);
+					// var yNorm:Number = (y - yMin) / (yMax - yMin);
+					var yNorm:Number = StandardLib.normalize(y, yMin, yMax);
+					
+					var yScreen:Number = StandardLib.scale(yNorm, 0, 1, unscaledHeight, 0);
+					
+					var c:Number = cData.getValueFromKey(key, Number);
+					var cNorm:Number = ColumnUtils.getNorm(cData, key);
+					var color:Number = StandardLib.interpolateColor(cNorm, 0xFF0000, 0x00FF00);
+						
+					canvas.graphics.lineStyle(1, 0, 0.5);
+					canvas.graphics.beginFill(color, 1.0);
+					canvas.graphics.drawCircle(xScreen, yScreen, r);
+					canvas.graphics.endFill();
+				}
+			}
+			
+
+		]]>
+	</mx:Script>
+	<ui:ControlPanel>
+		<mx:VBox label="First tab">
+			<mx:Label text="Example control panel"/>
+		</mx:VBox>
+		<mx:VBox label="Second tab">
+			<mx:Label text="Second tab of example control panel"/>
+		</mx:VBox>
+	</ui:ControlPanel>
+</ui:DraggablePanel>
