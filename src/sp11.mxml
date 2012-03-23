@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:DraggablePanel xmlns:mx="http://www.adobe.com/2006/mxml" xmlns:ui="weave.ui.*" layout="absolute" width="400" height="300" implements="weave.api.ui.IVisTool">
+	<mx:Canvas height="100%" width="100%" id="canvas1"/>
+	<mx:Script>
+		<![CDATA[
+			import weave.api.WeaveAPI;
+			import weave.api.data.IQualifiedKey;
+			import weave.api.getCallbackCollection;
+			import weave.api.newLinkableChild;
+			import weave.api.registerLinkableChild;
+			import weave.api.ui.IVisTool;
+			import weave.core.LinkableNumber;
+			import weave.data.AttributeColumns.DynamicColumn;
+			import weave.primitives.Bounds2D;
+			import weave.utils.ColumnUtils;
+			WeaveAPI.registerImplementation(IVisTool,sp11);
+			
+			public const xValues:DynamicColumn = newLinkableChild(this, DynamicColumn);
+			public const yValues:DynamicColumn = newLinkableChild(this, DynamicColumn);
+			public const colorValues:DynamicColumn = newLinkableChild(this, DynamicColumn);
+			public const radius:LinkableNumber = registerLinkableChild(this, new LinkableNumber(5));
+			
+			override protected function childrenCreated():void
+			{
+				super.childrenCreated();
+				
+				getCallbackCollection(this).addImmediateCallback(this, invalidateDisplayList);
+			}
+			
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
+			{
+				super.updateDisplayList(unscaledWidth,unscaledHeight);
+				
+				var keys:Array = ColumnUtils.getAllKeys([xValues, yValues, colorValues]);
+				
+				canvas1.graphics.clear();
+				
+				var xMin:Number = WeaveAPI.StatisticsCache.getMin(xValues);
+				var xMax:Number = WeaveAPI.StatisticsCache.getMax(xValues);
+				var yMin:Number = WeaveAPI.StatisticsCache.getMin(yValues);
+				var yMax:Number = WeaveAPI.StatisticsCache.getMax(yValues);
+				
+				var colorMax:Number = WeaveAPI.StatisticsCache.getMax(colorValues);
+				var colorMin:Number = WeaveAPI.StatisticsCache.getMin(colorValues);
+				
+				var dataBounds:Bounds2D = new Bounds2D(xMin, yMin, xMax, yMax);
+				var screenBounds:Bounds2D = new Bounds2D(0, 0, unscaledWidth, unscaledHeight);
+				
+				var projPoint:Point = new Point();
+				
+				for each( var key:IQualifiedKey in keys )
+				{
+					var x:Number = xValues.getValueFromKey(key, Number);
+					var y:Number = yValues.getValueFromKey(key, Number);
+					var color:Number = colorValues.getValueFromKey(key, Number);
+					 
+					projPoint.x = x;
+					projPoint.y = y;
+					
+					dataBounds.projectPointTo(projPoint,screenBounds);
+					
+					canvas1.graphics.beginFill(((color - colorMin)/(colorMax - colorMin)) * 0xFFFFFF);	 
+					canvas1.graphics.drawCircle(projPoint.x,projPoint.y,radius.value);		 
+				}
+				canvas1.graphics.endFill();
+			}
+		]]>
+	</mx:Script>	
+	<ui:ControlPanel>
+		<mx:VBox label="First tab">
+			<mx:Label text="Example control panel"/>
+		</mx:VBox>
+		<mx:VBox label="Second tab">
+			<mx:Label text="Second tab of example control panel"/>
+		</mx:VBox>
+	</ui:ControlPanel>
+</ui:DraggablePanel>
