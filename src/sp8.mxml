@@ -24,6 +24,7 @@ implements="weave.api.ui.IVisTool"-->
 <ui:DraggablePanel xmlns="example.*" xmlns:mx="http://www.adobe.com/2006/mxml" xmlns:ui="weave.ui.*"
 				   implements="weave.api.ui.IVisTool">
 	
+	<!--mx:Canvas id="canvas" width="100%" height="100%" clipContent="true"/-->
 	<mx:Canvas id="canvas" width="100%" height="100%"/>
 	<mx:Script>
 		<![CDATA[
@@ -33,19 +34,34 @@ implements="weave.api.ui.IVisTool"-->
 			import weave.api.data.IQualifiedKey;
 			import weave.api.getCallbackCollection;
 			import weave.api.newLinkableChild;
+			import weave.api.registerLinkableChild;
 			import weave.api.ui.IVisTool;
 			import weave.compiler.StandardLib;
+			import weave.core.LinkableNumber;
 			import weave.data.AttributeColumns.DynamicColumn;
 			import weave.primitives.Bounds2D;
 			import weave.primitives.ColorRamp;
+			import weave.utils.BitmapText;
 			import weave.utils.ColumnUtils;
 			WeaveAPI.registerImplementation(IVisTool, sp8);
+			
+			public const leftPercentMargin:LinkableNumber = registerLinkableChild(this, new LinkableNumber(20));
+			public const rightPercentMargin:LinkableNumber = registerLinkableChild(this, new LinkableNumber(20));
+			public const topPercentMargin:LinkableNumber = registerLinkableChild(this, new LinkableNumber(20));
+			public const bottomPercentMargin:LinkableNumber = registerLinkableChild(this, new LinkableNumber(20));
+			
+			public const sizePercent:LinkableNumber = registerLinkableChild(this, new LinkableNumber(0.05));
 			
 			public const xColumn:DynamicColumn = newLinkableChild(this, DynamicColumn);
 			public const yColumn:DynamicColumn = newLinkableChild(this, DynamicColumn);
 			public const cColumn:DynamicColumn = newLinkableChild(this, DynamicColumn);
-//			public const colorRamp:ColorRamp = newLinkableChild(this, ColorRamp);
-			private var cc:IAttributeColumn = (Weave.root.getObject(Weave.DEFAULT_COLOR_COLUMN) as IAttributeColumn)
+			private var cc:IAttributeColumn = (Weave.root.getObject(Weave.DEFAULT_COLOR_COLUMN) as IAttributeColumn);
+			
+			private var dataBounds:Bounds2D = new Bounds2D();
+			private var screenBounds:Bounds2D = new Bounds2D();
+			
+			private function get xSizePercent():Number {return Math.max(2.5, sizePercent.value * screenBounds.getXCoverage());}
+			private function get ySizePercent():Number {return Math.max(2.5, sizePercent.value * screenBounds.getYCoverage());}
 			
 			override protected function childrenCreated():void
 			{
@@ -67,11 +83,37 @@ implements="weave.api.ui.IVisTool"-->
 				var yMin:Number = WeaveAPI.StatisticsCache.getMin(yColumn);
 				var yMax:Number = WeaveAPI.StatisticsCache.getMax(yColumn);
 				
-				var dataBounds:Bounds2D = new Bounds2D(xMin, yMin, xMax, yMax);
-				var screenBounds:Bounds2D = new Bounds2D(0, unscaledHeight, unscaledWidth, 0);
+				canvas.graphics.clear();
+				
+				dataBounds.setBounds(xMin, yMin, xMax, yMax);
+				screenBounds.setBounds(0, canvas.height, canvas.width, 0);
+				
+				screenBounds.xMin += (canvas.width * leftPercentMargin.value) / 100;
+				screenBounds.yMin -= (canvas.height * bottomPercentMargin.value) / 100;
+				screenBounds.xMax -= (canvas.width * rightPercentMargin.value) / 100;
+				screenBounds.yMax += (canvas.height * topPercentMargin.value) / 100;
+				
 				var point:Point = new Point();
 				
-				canvas.graphics.clear();
+				canvas.graphics.lineStyle(1);
+				if (!isNaN(screenBounds.getXCoverage()) || !isNaN(screenBounds.getYCoverage())) // Fix error when closing tool
+					canvas.graphics.drawRect(
+						screenBounds.getXNumericMin(),
+						screenBounds.getYNumericMin(),
+						screenBounds.getXCoverage(),
+						screenBounds.getYCoverage());
+				
+				var tempBounds:Bounds2D = new Bounds2D();
+				// Left
+				tempBounds.copyFrom(screenBounds);
+				tempBounds.xMax = tempBounds.xMin;
+				drawTicks(dataBounds.yMin, dataBounds.yMax, tempBounds, vertical);
+				
+				// Bottom
+				tempBounds.copyFrom(screenBounds);
+				tempBounds.yMax = tempBounds.yMin;
+				drawTicks(dataBounds.xMin, dataBounds.xMax, tempBounds, horizontal);
+				
 				for each (var key:IQualifiedKey in keys)
 				{
 					var x:Number = xColumn.getValueFromKey(key, Number);
@@ -80,16 +122,10 @@ implements="weave.api.ui.IVisTool"-->
 					var xNorm:Number = StandardLib.normalize(x, xMin, xMax);
 					var yNorm:Number = StandardLib.normalize(y, yMin, yMax);					
 					var cNorm:Number = ColumnUtils.getNorm(cColumn, key); // Inside the loop ==> Less efficient
-//					var color:Number =  StandardLib.interpolateColor(cNorm, 0xFF0000, 0x00FF00);
-//					var color:Number = colorRamp.getColorFromNorm(cNorm);
 					var color:Number = cc.getValueFromKey(key, Number);
-						
-//					var xScreen:Number = StandardLib.scale(xNorm, 0, 1, 0, unscaledWidth);
-//					var yScreen:Number = StandardLib.scale(yNorm, 0, 1, unscaledHeight, 0);
 					
 					canvas.graphics.lineStyle(1, 0, 0.5);
 					canvas.graphics.beginFill(color, 1.0);
-//					canvas.graphics.drawCircle(xScreen, yScreen, r);
 					
 					point.x = x;
 					point.y = y;
@@ -97,9 +133,36 @@ implements="weave.api.ui.IVisTool"-->
 					canvas.graphics.drawCircle(point.x, point.y, r);
 					canvas.graphics.endFill();
 				}
-
 			} 
 			
+			
+			private var horizontal:uint = 0, vertical:uint = 1;
+			private function drawTicks(tickMin:Number, tickMax:Number, screenBounds:Bounds2D, orientation:uint):void
+			{			
+				var norm:Bounds2D = new Bounds2D(tickMin, tickMin, tickMax, tickMax);
+				var point:Point = new Point();
+				var ticks:Array = StandardLib.getNiceNumbersInRange(tickMin, tickMax, 10);
+				
+				for each (var tick:Number in ticks)
+				{
+					// tick mark might be less and larger than tickMin and tickMax
+					if (tick < tickMin || tick > tickMax) continue;
+					
+					point.x = tick;
+					point.y = tick;
+					norm.projectPointTo(point, screenBounds);
+					
+					if (orientation == horizontal)
+					{
+						canvas.graphics.moveTo(point.x, point.y - ySizePercent / 2);
+						canvas.graphics.lineTo(point.x, point.y + ySizePercent / 2);
+					} else if ((orientation == vertical))
+					{
+						canvas.graphics.moveTo(point.x - xSizePercent / 2, point.y);
+						canvas.graphics.lineTo(point.x + xSizePercent / 2, point.y);
+					}
+				}
+			}
 		]]>
 	</mx:Script>
 	<ui:ControlPanel>

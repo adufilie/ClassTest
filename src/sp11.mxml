@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ui:DraggablePanel xmlns:mx="http://www.adobe.com/2006/mxml" xmlns:ui="weave.ui.*" layout="absolute" width="400" height="300" implements="weave.api.ui.IVisTool">
-	<mx:Canvas height="100%" width="100%" id="canvas1"/>
+	<mx:Canvas height="100%" width="100%" id="canvas1" />
 	<mx:Script>
 		<![CDATA[
 			import weave.api.WeaveAPI;
@@ -9,6 +9,7 @@
 			import weave.api.newLinkableChild;
 			import weave.api.registerLinkableChild;
 			import weave.api.ui.IVisTool;
+			import weave.compiler.StandardLib;
 			import weave.core.LinkableNumber;
 			import weave.data.AttributeColumns.DynamicColumn;
 			import weave.primitives.Bounds2D;
@@ -19,6 +20,8 @@
 			public const yValues:DynamicColumn = newLinkableChild(this, DynamicColumn);
 			public const colorValues:DynamicColumn = newLinkableChild(this, DynamicColumn);
 			public const radius:LinkableNumber = registerLinkableChild(this, new LinkableNumber(5));
+			public const leftMargin:LinkableNumber = registerLinkableChild(this, new LinkableNumber(25));
+			public const bottomMargin:LinkableNumber = registerLinkableChild(this, new LinkableNumber(25));
 			
 			override protected function childrenCreated():void
 			{
@@ -44,16 +47,50 @@
 				var colorMin:Number = WeaveAPI.StatisticsCache.getMin(colorValues);
 				
 				var dataBounds:Bounds2D = new Bounds2D(xMin, yMin, xMax, yMax);
-				var screenBounds:Bounds2D = new Bounds2D(0, 0, unscaledWidth, unscaledHeight);
+				var screenBounds:Bounds2D = new Bounds2D(0, canvas1.height, canvas1.width, 0);
+				
+				screenBounds.xMin += leftMargin.value;
+				screenBounds.yMin -= bottomMargin.value;
+				
+				canvas1.graphics.lineStyle(1);
+				canvas1.graphics.drawRect(screenBounds.getXNumericMin(), screenBounds.getYNumericMin(), screenBounds.getXCoverage(), screenBounds.getYCoverage());
 				
 				var projPoint:Point = new Point();
+				
+				var ticks:Array = StandardLib.getNiceNumbersInRange(dataBounds.getXNumericMin(), dataBounds.getXNumericMax(), 5);
+				
+				var reusablePoint:Point = new Point();
+				
+				for each(var x:Number in ticks)
+				{
+					reusablePoint.x = x;
+					reusablePoint.y = dataBounds.getYMin();
+					dataBounds.projectPointTo(reusablePoint, screenBounds);
+					
+					canvas1.graphics.lineStyle(1);
+					canvas1.graphics.moveTo(reusablePoint.x, reusablePoint.y - 5);
+					canvas1.graphics.lineTo(reusablePoint.x, reusablePoint.y + 5);
+				}
+				
+				ticks = StandardLib.getNiceNumbersInRange(dataBounds.getYNumericMin(), dataBounds.getXNumericMax(), 5);
+				
+				for each(var y:Number in ticks)
+				{
+					reusablePoint.x = dataBounds.getXMin();
+					reusablePoint.y = y;
+					dataBounds.projectPointTo(reusablePoint, screenBounds);
+					
+					canvas1.graphics.lineStyle(1);
+					canvas1.graphics.moveTo(reusablePoint.x - 5, reusablePoint.y);
+					canvas1.graphics.lineTo(reusablePoint.x + 5, reusablePoint.y);
+				}
 				
 				for each( var key:IQualifiedKey in keys )
 				{
 					var x:Number = xValues.getValueFromKey(key, Number);
 					var y:Number = yValues.getValueFromKey(key, Number);
 					var color:Number = colorValues.getValueFromKey(key, Number);
-					 
+					
 					projPoint.x = x;
 					projPoint.y = y;
 					
