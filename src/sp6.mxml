@@ -22,36 +22,44 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 <ui:DraggablePanel xmlns="weave.example.*" xmlns:mx="http://www.adobe.com/2006/mxml" xmlns:ui="weave.ui.*"
 				   implements="weave.api.ui.IVisTool">
 	
-		<mx:VBox width="100%" height="100%">
-			<mx:Canvas width="100%" height="100%" id="canvas" mouseChildren="false"/>
+	<mx:VBox width="100%" height="100%">
+		<mx:Canvas width="100%" height="100%" id="canvas" mouseChildren="false" clipContent="true"/>
+		<mx:HBox width="100%">
+			<mx:Label text="Point Size:"/>
 			<mx:HSlider width="100%" id="hs" liveDragging="true" minimum="1" maximum="20" 
 						showTrackHighlight="true" />
-			<mx:Spacer>
-				
-			</mx:Spacer>
-			
-			
-		</mx:VBox>
+		</mx:HBox>
+		<mx:HBox width="100%">
+			<mx:Label text="Tick Interval:"/>
+			<mx:HSlider width="100%" id="ts" liveDragging="true" minimum="4" maximum="20" tickInterval="1" 
+						showTrackHighlight="true" />
+		</mx:HBox>
 		
+	</mx:VBox>
+	
 	<mx:Script>
 		<![CDATA[
+			import mx.controls.Text;
 			import mx.utils.ColorUtil;
+			import mx.utils.StringUtil;
 			
 			import weave.Weave;
 			import weave.api.WeaveAPI;
 			import weave.api.data.IAttributeColumn;
 			import weave.api.data.IQualifiedKey;
+			import weave.api.detectLinkableObjectChange;
 			import weave.api.getCallbackCollection;
 			import weave.api.linkBindableProperty;
 			import weave.api.newLinkableChild;
 			import weave.api.registerLinkableChild;
-			import weave.api.reportError;
 			import weave.api.ui.IVisTool;
 			import weave.compiler.StandardLib;
+			import weave.core.LinkableBoolean;
 			import weave.core.LinkableNumber;
 			import weave.data.AttributeColumns.DynamicColumn;
 			import weave.primitives.Bounds2D;
 			import weave.utils.ColumnUtils;
+			import weave.utils.ObjectPool;
 			
 			WeaveAPI.registerImplementation(IVisTool, sp6);
 			
@@ -59,52 +67,142 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			public const yData:DynamicColumn = newLinkableChild(this,DynamicColumn);
 			public const colorCol:IAttributeColumn = Weave.root.getObject(Weave.DEFAULT_COLOR_COLUMN) as IAttributeColumn;
 			
+			public const leftMargin:LinkableNumber = registerLinkableChild(this,new LinkableNumber(5));
+			public const rightMargin:LinkableNumber = registerLinkableChild(this,new LinkableNumber(5));
+			public const topMargin:LinkableNumber = registerLinkableChild(this,new LinkableNumber(5));
+			public const bottomMargin:LinkableNumber = registerLinkableChild(this,new LinkableNumber(5));
+			
 			public const radius:LinkableNumber = registerLinkableChild(this,new LinkableNumber(5));
-				
+			public const tickIntervals:LinkableNumber = registerLinkableChild(this,new LinkableNumber(5));
+			
 			override protected function childrenCreated():void{
 				super.childrenCreated();
 				getCallbackCollection(this).addImmediateCallback(this,invalidateDisplayList);
+				getCallbackCollection(colorCol).addImmediateCallback(this,invalidateDisplayList);
 				linkBindableProperty(radius,hs,"value");
-				
+				linkBindableProperty(tickIntervals,ts,"value");
 			}
 			
 			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void{
 				super.updateDisplayList.apply(this,arguments);	
-				
-				try
-				{
-					
-					var keys:Array = ColumnUtils.getAllKeys([xData,yData,colorCol]);
-					
-					var xMin:Number = WeaveAPI.StatisticsCache.getMin(xData);
-					var xMax:Number = WeaveAPI.StatisticsCache.getMax(xData);
-					var yMin:Number = WeaveAPI.StatisticsCache.getMin(yData);
-					var yMax:Number = WeaveAPI.StatisticsCache.getMax(yData);					
-					
-					var dataBounds:Bounds2D = new Bounds2D(xMin,yMin,xMax,yMax);
-					var screenBounds:Bounds2D = new Bounds2D(0,unscaledHeight,unscaledWidth,0);
-					
-					var pt:Point = new Point();
-					var col:Number;
-					
-					canvas.graphics.clear();
-					
-					for each(var key:IQualifiedKey in keys){
-						pt.x= xData.getValueFromKey(key,Number);
-						pt.y = yData.getValueFromKey(key,Number);					
-						col = colorCol.getValueFromKey(key,Number);
+				if(isNaN(radius.value)){
+					//During close event radius.value becomes NaN 
+					trace();
+				}else{
+					if(xData.keys.length >0 || yData.keys.length > 0){
+						trace("drawing")
+						//Issues:
+						//maximize event not updating properly - delays its updating
+						// resize from Bottom delays updating
+						// session history - updates delays
+						if(detectLinkableObjectChange(updateDisplayList,panelWidth)||
+							detectLinkableObjectChange(updateDisplayList,panelWidth)||
+							detectLinkableObjectChange(updateDisplayList,panelX)||
+							detectLinkableObjectChange(updateDisplayList,panelY)||
+							detectLinkableObjectChange(updateDisplayList,maximized)||
+							detectLinkableObjectChange(updateDisplayList,radius)||
+							detectLinkableObjectChange(updateDisplayList,tickIntervals))
+						{
+							var keys:Array = ColumnUtils.getAllKeys([xData,yData,colorCol]);
 							
-						dataBounds.projectPointTo(pt,screenBounds);
+							var xMin:Number = WeaveAPI.StatisticsCache.getMin(xData);
+							var xMax:Number = WeaveAPI.StatisticsCache.getMax(xData);
+							var yMin:Number = WeaveAPI.StatisticsCache.getMin(yData);
+							var yMax:Number = WeaveAPI.StatisticsCache.getMax(yData);					
+							
+							var dataBounds:Bounds2D = new Bounds2D(xMin,yMin,xMax,yMax);
+							var screenBounds:Bounds2D = new Bounds2D(0,this.canvas.height,this.canvas.width,0);
+							screenBounds.xMin = leftMargin.value/100 * canvas.width;
+							screenBounds.xMax = canvas.width - (rightMargin.value/100 * canvas.width);
+							screenBounds.yMin = canvas.height - (bottomMargin.value/100 * canvas.height);
+							screenBounds.yMax = topMargin.value/100 * canvas.height;
+							
+							canvas.graphics.clear();
+							canvas.graphics.lineStyle(1,0,1);
+							canvas.graphics.moveTo(screenBounds.xMin,screenBounds.yMin);
+							canvas.graphics.lineTo(screenBounds.xMax,screenBounds.yMin);
+							canvas.graphics.lineTo(screenBounds.xMax,screenBounds.yMax);
+							canvas.graphics.lineTo(screenBounds.xMin,screenBounds.yMax);
+							canvas.graphics.lineTo(screenBounds.xMin,screenBounds.yMin);
+							
+							drawTicks(screenBounds);
+							var pt:Point = new Point();
+							var col:Number;
+							
+							for each(var key:IQualifiedKey in keys){
+								pt.x= xData.getValueFromKey(key,Number);
+								pt.y = yData.getValueFromKey(key,Number);					
+								col = colorCol.getValueFromKey(key,Number);						
+								dataBounds.projectPointTo(pt,screenBounds);					
+								canvas.graphics.lineStyle(1,0,0.5);
+								canvas.graphics.beginFill(col,1.0);
+								canvas.graphics.drawCircle(pt.x,pt.y,radius.value);
+								canvas.graphics.endFill();					
+							}
+						}
 						
-						canvas.graphics.lineStyle(1,0,0.5);
-						canvas.graphics.beginFill(col,1.0);
-						canvas.graphics.drawCircle(pt.x,pt.y,radius.value);
-						canvas.graphics.endFill();					
 					}
-				}
-				catch (e:Error)
-				{
-					reportError(e);
+				}				
+			}
+			
+			/**
+			 * This is the list of Bounds2D objects that were returned by getReusableBounds().
+			 * These objects will be returned to the ObjectPool when spatialCallbacks run.
+			 */
+			private var pooledObjects:Array = [];
+			
+			/**
+			 * This function gets called as the first spatial callback.
+			 * All Bounds2D objects that were returned by getReusableBounds() will return to the ObjectPool.
+			 */
+			private function returnPooledObjects():void
+			{
+				for each (var object:Object in pooledObjects)
+				ObjectPool.returnObject(object);
+				pooledObjects = [];
+			}
+			
+			private function drawTicks(scrBounds:Bounds2D):void{
+				var xRange:Number = scrBounds.getXCoverage();
+				var yRange:Number = scrBounds.getYCoverage();	
+				
+				var xTickDist:Number = xRange / tickIntervals.value;
+				var yTickDist:Number = yRange / tickIntervals.value;
+				var tickXpos:Number = scrBounds.xMin;
+				var tickYpos:Number = scrBounds.yMin;
+				returnPooledObjects();
+				for(var i:int = 1 ; i <= tickIntervals.value ; i ++){
+					canvas.graphics.lineStyle(1,0,1);
+					for(var j:int = 1 ; j <= 4;j ++){	
+						canvas.graphics.drawCircle(tickXpos,tickYpos,4);
+						canvas.graphics.drawCircle(tickXpos,tickYpos,4);
+						
+//						var label:Text = ObjectPool.borrowObject(Text);
+//						pooledObjects.push(label);
+//						label.text = StringUtil.substitute("({0},{1})", tickXpos, tickYpos);
+//						addChild(label);
+//						label.x = tickXpos;
+//						label.y = tickYpos;
+						
+						if(j==1){
+							tickXpos = scrBounds.xMin + i *  xTickDist;
+							tickYpos = scrBounds.yMin;
+						}
+						if(j==2){
+							tickXpos = scrBounds.xMin;
+							tickYpos = scrBounds.yMin - i *  yTickDist;
+						}	
+						if(j==3){
+							tickXpos = scrBounds.xMin + i *  xTickDist;
+							tickYpos = scrBounds.yMax;
+						}
+						if(j==4){
+							tickXpos = scrBounds.xMax;
+							tickYpos = scrBounds.yMin - i *  yTickDist;
+						}
+						
+					} 
+					
 				}
 			}
 			
