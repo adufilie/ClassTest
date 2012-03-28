@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ui:DraggablePanel xmlns:mx="http://www.adobe.com/2006/mxml" xmlns:ui="weave.ui.*" layout="absolute" width="400" height="300" implements="weave.api.ui.IVisTool">
-	<mx:Canvas height="100%" width="100%" id="canvas1" />
+	<mx:Canvas height="100%" width="100%" id="canvas1"/>
 	<mx:Script>
 		<![CDATA[
+			import mx.controls.Text;
+			import mx.events.ResizeEvent;
+			
 			import weave.api.WeaveAPI;
 			import weave.api.data.IQualifiedKey;
 			import weave.api.getCallbackCollection;
@@ -13,7 +16,10 @@
 			import weave.core.LinkableNumber;
 			import weave.data.AttributeColumns.DynamicColumn;
 			import weave.primitives.Bounds2D;
+			import weave.utils.BitmapText;
+			import weave.utils.BitmapUtils;
 			import weave.utils.ColumnUtils;
+			import weave.utils.PlotterUtils;
 			WeaveAPI.registerImplementation(IVisTool,sp11);
 			
 			public const xValues:DynamicColumn = newLinkableChild(this, DynamicColumn);
@@ -23,11 +29,14 @@
 			public const leftMargin:LinkableNumber = registerLinkableChild(this, new LinkableNumber(25));
 			public const bottomMargin:LinkableNumber = registerLinkableChild(this, new LinkableNumber(25));
 			
+			private var plotterBitmap:Bitmap = new Bitmap(new BitmapData(800, 800));
+			
 			override protected function childrenCreated():void
 			{
 				super.childrenCreated();
 				
 				getCallbackCollection(this).addImmediateCallback(this, invalidateDisplayList);
+				canvas1.rawChildren.addChild(plotterBitmap);
 			}
 			
 			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
@@ -61,11 +70,20 @@
 				
 				var reusablePoint:Point = new Point();
 				
+				var labelTextBitmap:BitmapText = new BitmapText();
+				PlotterUtils.setBitmapDataSize(plotterBitmap, canvas1.width, canvas1.height);				
+				plotterBitmap.bitmapData.fillRect(plotterBitmap.bitmapData.rect, 0x00000000);
+				
 				for each(var x:Number in ticks)
 				{
 					reusablePoint.x = x;
 					reusablePoint.y = dataBounds.getYMin();
 					dataBounds.projectPointTo(reusablePoint, screenBounds);
+					
+					labelTextBitmap.x = reusablePoint.x;
+					labelTextBitmap.y = reusablePoint.y;
+					labelTextBitmap.text = x.toString();
+					labelTextBitmap.draw(plotterBitmap.bitmapData);
 					
 					canvas1.graphics.lineStyle(1);
 					canvas1.graphics.moveTo(reusablePoint.x, reusablePoint.y - 5);
@@ -73,12 +91,17 @@
 				}
 				
 				ticks = StandardLib.getNiceNumbersInRange(dataBounds.getYNumericMin(), dataBounds.getXNumericMax(), 5);
-				
+				labelTextBitmap.horizontalAlign = BitmapText.HORIZONTAL_ALIGN_LEFT;
 				for each(var y:Number in ticks)
 				{
 					reusablePoint.x = dataBounds.getXMin();
 					reusablePoint.y = y;
 					dataBounds.projectPointTo(reusablePoint, screenBounds);
+					
+					labelTextBitmap.x = reusablePoint.x;
+					labelTextBitmap.y = reusablePoint.y;
+					labelTextBitmap.text = y.toString();
+					labelTextBitmap.draw(plotterBitmap.bitmapData);
 					
 					canvas1.graphics.lineStyle(1);
 					canvas1.graphics.moveTo(reusablePoint.x - 5, reusablePoint.y);
@@ -101,6 +124,7 @@
 				}
 				canvas1.graphics.endFill();
 			}
+			
 		]]>
 	</mx:Script>	
 	<ui:ControlPanel>
