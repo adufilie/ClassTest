@@ -43,9 +43,9 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			WeaveAPI.registerImplementation(IVisTool, sp10);
 			
 			
-			public const marginBottom:LinkableNumber = registerLinkableChild(this, LinkableNumber(20));
-			public const marginLeft:LinkableNumber = registerLinkableChild(this, LinkableNumber(20));
-			public const sizePercent:LinkableNumber = registerLinkableChild(this, LinkableNumber(0.01));
+			public const marginBottom:LinkableNumber = registerLinkableChild(this, new LinkableNumber(20));
+			public const marginLeft:LinkableNumber = registerLinkableChild(this, new LinkableNumber(20));
+			public const sizePercent:LinkableNumber = registerLinkableChild(this, new LinkableNumber(0.01));
 			
 			
 			public const xData:DynamicColumn = newLinkableChild(this, DynamicColumn);
