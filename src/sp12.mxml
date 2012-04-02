@@ -29,6 +29,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			import weave.Weave;
 			import weave.api.WeaveAPI;
 			import weave.api.data.IAttributeColumn;
+			import weave.api.data.IKeySet;
 			import weave.api.data.IQualifiedKey;
 			import weave.api.getCallbackCollection;
 			import weave.api.newLinkableChild;
@@ -37,7 +38,9 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			import weave.core.LinkableNumber;
 			import weave.core.weave_internal;
 			import weave.data.AttributeColumns.DynamicColumn;
+			import weave.data.KeySets.KeySet;
 			import weave.data.StatisticsCache;
+			import weave.primitives.Bounds2D;
 			import weave.primitives.ColorRamp;
 			import weave.utils.BitmapText;
 			import weave.utils.BitmapUtils;
@@ -65,6 +68,13 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			private var bitmap:Bitmap = new Bitmap(new BitmapData(500, 500, true));
 			private var bitmapText:BitmapText = new BitmapText();
 			
+			private var dataBounds:Bounds2D = new Bounds2D();
+			private var screenBounds:Bounds2D = new Bounds2D();
+			private var tempPoint:Point = new Point();
+			private var probedKeys:Array = [];
+			
+			private var r:Number = 5;
+			
 			override protected function createChildren():void{
 				super.createChildren();
 				canvas.rawChildren.addChild(bitmap);
@@ -73,12 +83,60 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			override protected function childrenCreated():void{
 				super.childrenCreated();
 				getCallbackCollection(this).addImmediateCallback(this, invalidateDisplayList);
+				canvas.addEventListener(MouseEvent.MOUSE_MOVE,mouseMove);
 			}
+			
+			private function mouseMove(event:MouseEvent):void{
+				//				tempPoint.x = event.localX;
+				//				tempPoint.y = event.localY;
+				//				tempPoint = canvas.globalToLocal(tempPoint);
+				//				var mouseX:Number = tempPoint.x;
+				//				var mouseY:Number = tempPoint.y;
+				
+				var mouseX:Number = event.localX;
+				var mouseY:Number = event.localY;
+				
+				var keys:Array = ColumnUtils.getAllKeys([xData,yData,cData]);
+				probedKeys = [];
+				for each(var key:IQualifiedKey in keys)
+				{
+					tempPoint.x = xData.getValueFromKey(key);
+					tempPoint.y = yData.getValueFromKey(key);
+					dataBounds.projectPointTo(tempPoint, screenBounds);
+					var recordX:Number = tempPoint.x;
+					var recordY:Number = tempPoint.y;
+					var dx:Number = recordX - mouseX;
+					var dy:Number = recordY - mouseY;
+					
+					trace('mouseX = '+mouseX+', recordX = '+recordX);
+					trace('mouseY = '+mouseY+', recordY = '+recordY);
+					
+					
+					if(dx*dx+dy*dy < r*r)
+						probedKeys.push(key);
+				}
+				var probedKeySet:KeySet = Weave.root.getObject(Weave.DEFAULT_PROBE_KEYSET) as KeySet;
+				probedKeySet.replaceKeys(probedKeys);
+				invalidateDisplayList();
+				
+			}
+			
 			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void{
 				super.updateDisplayList.apply(this,arguments);
 				
+				var xMin:Number = WeaveAPI.StatisticsCache.getMin(xData);
+				var xMax:Number = WeaveAPI.StatisticsCache.getMax(xData);
+				var yMin:Number = WeaveAPI.StatisticsCache.getMin(yData);
+				var yMax:Number = WeaveAPI.StatisticsCache.getMax(yData);
+				
+				dataBounds.setBounds(xMin, yMin, xMax, yMax);
+				
+				screenBounds.setXRange(marginLeft, canvas.width - marginRight);
+				screenBounds.setYRange(canvas.height - marginBottom, marginTop);
+				
+				
 				var keys:Array = ColumnUtils.getAllKeys([xData,yData,cData]);
-				var r:Number = 5;
+				
 				canvas.graphics.clear();
 				canvas.graphics.lineStyle(1,0x000000);
 				canvas.graphics.drawRect(marginLeft,marginTop,
@@ -92,6 +150,9 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 					var c:Number = ColumnUtils.getNorm(cData,key);
 					var cc:IAttributeColumn = (Weave.root.getObject(Weave.DEFAULT_COLOR_COLUMN) as IAttributeColumn);
 					var color:Number = cc.getValueFromKey(key,Number);
+					
+					if(probedKeys.indexOf(key) != -1)
+						color = 0xFF0000;
 					
 					var xScreen:Number = StandardLib.scale(x,0,1,marginLeft,canvas.width - marginRight);
 					var yScreen:Number = StandardLib.scale(y,1,0,marginTop,canvas.height - marginBottom);
@@ -112,8 +173,6 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				var widthOrHeight:Number = axis == X_AXIS?canvas.width:canvas.height;
 				var n:Number = numTicks * widthOrHeight / 500;
 				var niceNumbers:Array = StandardLib.getNiceNumbersInRange(min,max,n);
-				
-				
 				
 				//draw ticks
 				var x:Number, y:Number;

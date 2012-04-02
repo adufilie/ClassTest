@@ -42,7 +42,9 @@ implements="weave.api.ui.IVisTool"-->
 			import weave.primitives.Bounds2D;
 			import weave.primitives.ColorRamp;
 			import weave.utils.BitmapText;
+			import weave.utils.BitmapUtils;
 			import weave.utils.ColumnUtils;
+			import weave.utils.PlotterUtils;
 			WeaveAPI.registerImplementation(IVisTool, sp8);
 			
 			public const leftPercentMargin:LinkableNumber = registerLinkableChild(this, new LinkableNumber(20));
@@ -63,6 +65,15 @@ implements="weave.api.ui.IVisTool"-->
 			private function get xSizePercent():Number {return Math.max(2.5, sizePercent.value * screenBounds.getXCoverage());}
 			private function get ySizePercent():Number {return Math.max(2.5, sizePercent.value * screenBounds.getYCoverage());}
 			
+			private var bitmap:Bitmap = new Bitmap(new BitmapData(500, 500, true));
+			
+			override protected function createChildren():void
+			{
+				super.createChildren();
+				canvas.rawChildren.addChild(bitmap);
+				invalidateDisplayList();
+			}
+			
 			override protected function childrenCreated():void
 			{
 				super.childrenCreated();
@@ -74,6 +85,9 @@ implements="weave.api.ui.IVisTool"-->
 			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
 			{
 				super.updateDisplayList.apply(this, arguments); // Shortcut: using arguments
+				
+				bitmap.bitmapData.fillRect(bitmap.bitmapData.rect, 0x00000000);
+				PlotterUtils.setBitmapDataSize(bitmap, canvas.width, canvas.height);
 				
 				var r:Number = 5;
 				var keys:Array = ColumnUtils.getAllKeys([xColumn, yColumn, cColumn]);
@@ -95,13 +109,15 @@ implements="weave.api.ui.IVisTool"-->
 				
 				var point:Point = new Point();
 				
-				canvas.graphics.lineStyle(1);
 				if (!isNaN(screenBounds.getXCoverage()) || !isNaN(screenBounds.getYCoverage())) // Fix error when closing tool
+				{
+					canvas.graphics.lineStyle(1);
 					canvas.graphics.drawRect(
 						screenBounds.getXNumericMin(),
 						screenBounds.getYNumericMin(),
 						screenBounds.getXCoverage(),
 						screenBounds.getYCoverage());
+				}
 				
 				var tempBounds:Bounds2D = new Bounds2D();
 				// Left
@@ -113,6 +129,9 @@ implements="weave.api.ui.IVisTool"-->
 				tempBounds.copyFrom(screenBounds);
 				tempBounds.yMax = tempBounds.yMin;
 				drawTicks(dataBounds.xMin, dataBounds.xMax, tempBounds, horizontal);
+				
+				// *** ToDo Deal with missing data ==> isNaN() ***
+				// *** ToDo Fix Bug ==> Close the scatter plot tool ***
 				
 				for each (var key:IQualifiedKey in keys)
 				{
@@ -137,17 +156,23 @@ implements="weave.api.ui.IVisTool"-->
 			
 			
 			private var horizontal:uint = 0, vertical:uint = 1;
+			private var bitmapText:BitmapText = new BitmapText();
 			private function drawTicks(tickMin:Number, tickMax:Number, screenBounds:Bounds2D, orientation:uint):void
 			{			
 				var norm:Bounds2D = new Bounds2D(tickMin, tickMin, tickMax, tickMax);
 				var point:Point = new Point();
-				var ticks:Array = StandardLib.getNiceNumbersInRange(tickMin, tickMax, 10);
+				var numberOfTicks:Number;
+				if (orientation == horizontal)
+					numberOfTicks = screenBounds.getXCoverage() / 15;
+				else if (orientation == vertical)
+					numberOfTicks = screenBounds.getYCoverage() / 15;
+				
+				var ticks:Array = StandardLib.getNiceNumbersInRange(tickMin, tickMax, numberOfTicks);
 				
 				for each (var tick:Number in ticks)
 				{
-					// tick mark might be less and larger than tickMin and tickMax
+					// tick might be less and larger than tickMin and tickMax
 					if (tick < tickMin || tick > tickMax) continue;
-					
 					point.x = tick;
 					point.y = tick;
 					norm.projectPointTo(point, screenBounds);
@@ -156,11 +181,21 @@ implements="weave.api.ui.IVisTool"-->
 					{
 						canvas.graphics.moveTo(point.x, point.y - ySizePercent / 2);
 						canvas.graphics.lineTo(point.x, point.y + ySizePercent / 2);
-					} else if ((orientation == vertical))
+						bitmapText.horizontalAlign = BitmapText.HORIZONTAL_ALIGN_CENTER;
+						bitmapText.verticalAlign = BitmapText.VERTICAL_ALIGN_TOP;
+					}
+					else if ((orientation == vertical))
 					{
 						canvas.graphics.moveTo(point.x - xSizePercent / 2, point.y);
 						canvas.graphics.lineTo(point.x + xSizePercent / 2, point.y);
+						bitmapText.horizontalAlign = BitmapText.HORIZONTAL_ALIGN_RIGHT;
+						bitmapText.verticalAlign = BitmapText.VERTICAL_ALIGN_MIDDLE;
 					}
+					
+					bitmapText.text = tick.toString();
+					bitmapText.x = point.x;
+					bitmapText.y = point.y;					
+					bitmapText.draw(bitmap.bitmapData);
 				}
 			}
 		]]>

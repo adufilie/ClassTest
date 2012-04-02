@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
 /*
-    Weave (Web-based Analysis and Visualization Environment)
-    Copyright (C) 2008-2011 University of Massachusetts Lowell
+Weave (Web-based Analysis and Visualization Environment)
+Copyright (C) 2008-2011 University of Massachusetts Lowell
 
-    This file is a part of Weave.
+This file is a part of Weave.
 
-    Weave is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License, Version 3,
-    as published by the Free Software Foundation.
+Weave is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License, Version 3,
+as published by the Free Software Foundation.
 
-    Weave is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+Weave is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with Weave.  If not, see <http://www.gnu.org/licenses/>.
+You should have received a copy of the GNU General Public License
+along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 */
 -->
 <ui:DraggablePanel xmlns="weave.example.*" xmlns:mx="http://www.adobe.com/2006/mxml" xmlns:ui="weave.ui.*"
@@ -28,8 +28,10 @@
 			import weave.api.data.IQualifiedKey;
 			import weave.api.getCallbackCollection;
 			import weave.api.newLinkableChild;
+			import weave.api.registerLinkableChild;
 			import weave.api.ui.IVisTool;
 			import weave.compiler.StandardLib;
+			import weave.core.LinkableNumber;
 			import weave.data.AttributeColumns.DynamicColumn;
 			import weave.utils.ColumnUtils;
 			WeaveAPI.registerImplementation(IVisTool, sp2);
@@ -37,7 +39,9 @@
 			public const xData:DynamicColumn = newLinkableChild(this, DynamicColumn);
 			public const yData:DynamicColumn = newLinkableChild(this, DynamicColumn);
 			public const cData:DynamicColumn = newLinkableChild(this, DynamicColumn);
-
+			//		public const radius:LinkableNumber = registerLinkableChild(this, new LinkableNumber(5));
+			//		public const weight:LinkableNumber = registerLinkableChild(this, new LinkableNumber(1));
+			
 			override protected function childrenCreated():void
 			{
 				super.childrenCreated();
@@ -49,32 +53,41 @@
 			{
 				super.updateDisplayList.apply(this, arguments);
 				var keys:Array = ColumnUtils.getAllKeys([xData, yData, cData]);
-				var r:int = 5
+				var r:Number = 0.05;
+				var weight:Number = 1 / unscaledWidth;
 				
+				//var xMin:Number = WeaveAPI.StatisticsCache.getMin(xData);
+				//var xMax:Number = WeaveAPI.StatisticsCache.getMax(xData);
 				var yMin:Number = WeaveAPI.StatisticsCache.getMin(yData);
 				var yMax:Number = WeaveAPI.StatisticsCache.getMax(yData);
+				
+				canvas.scaleX = unscaledWidth;
+				canvas.scaleY = unscaledHeight
+				
+				canvas.graphics.clear();
+				
 				for each (var key:IQualifiedKey in keys)
 				{
 					
 					var xNorm:Number = ColumnUtils.getNorm(xData, key);
-					var xScreen:Number = StandardLib.scale(xNorm, 0, 1, 0,unscaledWidth);
+					//var xScreen:Number = StandardLib.scale(xNorm, 0, 1, 0, unscaledWidth);
 					
 					var y:Number = yData.getValueFromKey(key, Number);
 					//var yNorm:Number = (y - yMin)/ (yMax - yMin);
 					var yNorm:Number = StandardLib.normalize(y, yMin, yMax);
-					var yScreen:Number = StandardLib.scale(yNorm, 0, 1, 0,unscaledHeight);
+					//var yScreen:Number = StandardLib.scale(yNorm, 0, 1, unscaledHeight, 0);
 					
 					var c:Number = cData.getValueFromKey(key, Number);
 					var cNorm:Number = ColumnUtils.getNorm(cData, key);
 					var color:Number = StandardLib.interpolateColor(cNorm, 0xFF0000, 0x00FF00);
 					
-					canvas.graphics.lineStyle(1, 0, 0.5);
+					canvas.graphics.lineStyle(weight, 0, 0.5);
 					canvas.graphics.beginFill(color, 1.0);
-					canvas.graphics.drawCircle(xScreen, yScreen, r);
+					canvas.graphics.drawCircle(xNorm, yNorm, r);
 					canvas.graphics.endFill();
 				}
 			}
-		
+			
 		]]>
 	</mx:Script>
 	<ui:ControlPanel>
