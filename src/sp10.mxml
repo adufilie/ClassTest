@@ -32,6 +32,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			import weave.api.getCallbackCollection;
 			import weave.api.newLinkableChild;
 			import weave.api.registerLinkableChild;
+			import weave.api.reportError;
 			import weave.api.ui.IVisTool;
 			import weave.compiler.StandardLib;
 			import weave.core.LinkableNumber;
@@ -67,97 +68,102 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			{
 				super.updateDisplayList.apply(this, arguments);
 				
-				
-				var keys:Array = ColumnUtils.getAllKeys([xData,yData,cData]);
-				var r:Number = 5;
-				var weight:Number = 1;
-				
-				
-				var xMin:Number = WeaveAPI.StatisticsCache.getMin(xData);
-				var xMax:Number = WeaveAPI.StatisticsCache.getMax(xData);
-				var yMin:Number = WeaveAPI.StatisticsCache.getMin(yData);
-				var yMax:Number = WeaveAPI.StatisticsCache.getMax(yData);
-				
-				
-				canvas.graphics.clear();
-				
-				
-				dataBounds.setBounds(xMin, yMin, xMax, yMax);
-				screenBounds.setBounds(0, canvas.height, canvas.width, 0);
-				
-				
-				screenBounds.xMin += (canvas.width * marginLeft.value) / 100;
-				screenBounds.yMin -= (canvas.height * marginBottom.value) / 100;
-				var point:Point = new Point();
-				
-				
-				//canvas.graphics.endFill();
-				canvas.graphics.lineStyle(1, 0, 1.0, false, LineScaleMode.NORMAL);
-				canvas.graphics.drawRect(
-					screenBounds.getXNumericMin(), 
-					screenBounds.getYNumericMin(),
-					screenBounds.getXCoverage(), 
-					screenBounds.getYCoverage()
-				);
-				
-				
-				
-				
-				var tempBounds:Bounds2D = new Bounds2D;
-				
-				
-				// left
-				tempBounds.copyFrom(screenBounds);
-				tempBounds.xMax = tempBounds.xMin;
-				drawTicks(dataBounds.yMin, dataBounds.yMax, tempBounds); 
-				
-				
-				// right
-				tempBounds.copyFrom(screenBounds);
-				tempBounds.xMin = tempBounds.xMax;
-				drawTicks(dataBounds.yMin, dataBounds.yMax, tempBounds); 
-				
-				
-				// top
-				tempBounds.copyFrom(screenBounds);
-				tempBounds.yMax = tempBounds.yMin;
-				drawTicks(dataBounds.xMin, dataBounds.xMax, tempBounds); 
-				
-				
-				// bottom
-				tempBounds.copyFrom(screenBounds);
-				tempBounds.yMin = tempBounds.yMax;
-				drawTicks(dataBounds.xMin, dataBounds.xMax, tempBounds); 
-				
-				
-				
-				for each (var key:IQualifiedKey in keys)
+				try
 				{
+					var keys:Array = ColumnUtils.getAllKeys([xData,yData,cData]);
+					var r:Number = 5;
+					var weight:Number = 1;
 					
 					
-					var x:Number = xData.getValueFromKey(key, Number);
-					var y:Number = yData.getValueFromKey(key, Number);
-					
-					point.x = x;
-					point.y = y;
-					dataBounds.projectPointTo(point, screenBounds);
+					var xMin:Number = WeaveAPI.StatisticsCache.getMin(xData);
+					var xMax:Number = WeaveAPI.StatisticsCache.getMax(xData);
+					var yMin:Number = WeaveAPI.StatisticsCache.getMin(yData);
+					var yMax:Number = WeaveAPI.StatisticsCache.getMax(yData);
 					
 					
-					var c:Number = cData.getValueFromKey(key, Number);
-					var cNorm:Number = ColumnUtils.getNorm(cData, key);
-					var cc:IAttributeColumn = (Weave.root.getObject(Weave.DEFAULT_COLOR_COLUMN) as IAttributeColumn);
-					var color:Number = cc.getValueFromKey(key, Number);
+					canvas.graphics.clear();
 					
 					
+					dataBounds.setBounds(xMin, yMin, xMax, yMax);
+					screenBounds.setBounds(0, canvas.height, canvas.width, 0);
+					
+					
+					screenBounds.xMin += (canvas.width * marginLeft.value) / 100;
+					screenBounds.yMin -= (canvas.height * marginBottom.value) / 100;
+					var point:Point = new Point();
+					
+					
+					//canvas.graphics.endFill();
 					canvas.graphics.lineStyle(1, 0, 1.0, false, LineScaleMode.NORMAL);
-					canvas.graphics.beginFill(color, 1.0);
-					canvas.graphics.drawCircle(point.x, point.y, r);
-					canvas.graphics.endFill();
+					canvas.graphics.drawRect(
+						screenBounds.getXNumericMin(), 
+						screenBounds.getYNumericMin(),
+						screenBounds.getXCoverage(), 
+						screenBounds.getYCoverage()
+					);
 					
+					
+					
+					
+					var tempBounds:Bounds2D = new Bounds2D;
+					
+					
+					// left
+					tempBounds.copyFrom(screenBounds);
+					tempBounds.xMax = tempBounds.xMin;
+					drawTicks(dataBounds.yMin, dataBounds.yMax, tempBounds); 
+					
+					
+					// right
+					tempBounds.copyFrom(screenBounds);
+					tempBounds.xMin = tempBounds.xMax;
+					drawTicks(dataBounds.yMin, dataBounds.yMax, tempBounds); 
+					
+					
+					// top
+					tempBounds.copyFrom(screenBounds);
+					tempBounds.yMax = tempBounds.yMin;
+					drawTicks(dataBounds.xMin, dataBounds.xMax, tempBounds); 
+					
+					
+					// bottom
+					tempBounds.copyFrom(screenBounds);
+					tempBounds.yMin = tempBounds.yMax;
+					drawTicks(dataBounds.xMin, dataBounds.xMax, tempBounds); 
+					
+					
+					
+					for each (var key:IQualifiedKey in keys)
+					{
+						
+						
+						var x:Number = xData.getValueFromKey(key, Number);
+						var y:Number = yData.getValueFromKey(key, Number);
+						
+						point.x = x;
+						point.y = y;
+						dataBounds.projectPointTo(point, screenBounds);
+						
+						
+						var c:Number = cData.getValueFromKey(key, Number);
+						var cNorm:Number = ColumnUtils.getNorm(cData, key);
+						var cc:IAttributeColumn = (Weave.root.getObject(Weave.DEFAULT_COLOR_COLUMN) as IAttributeColumn);
+						var color:Number = cc.getValueFromKey(key, Number);
+						
+						
+						canvas.graphics.lineStyle(1, 0, 1.0, false, LineScaleMode.NORMAL);
+						canvas.graphics.beginFill(color, 1.0);
+						canvas.graphics.drawCircle(point.x, point.y, r);
+						canvas.graphics.endFill();
+						
+						
+					}
 					
 				}
-				
-				
+				catch (e:Error)
+				{
+					reportError(e);
+				}
 				
 				
 				

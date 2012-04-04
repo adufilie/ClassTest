@@ -33,8 +33,10 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			import weave.api.data.IQualifiedKey;
 			import weave.api.getCallbackCollection;
 			import weave.api.newLinkableChild;
+			import weave.api.registerLinkableChild;
 			import weave.api.ui.IVisTool;
 			import weave.compiler.StandardLib;
+			import weave.core.LinkableDynamicObject;
 			import weave.core.LinkableNumber;
 			import weave.core.weave_internal;
 			import weave.data.AttributeColumns.DynamicColumn;
@@ -42,6 +44,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			import weave.data.StatisticsCache;
 			import weave.primitives.Bounds2D;
 			import weave.primitives.ColorRamp;
+			import weave.primitives.KDTree;
 			import weave.utils.BitmapText;
 			import weave.utils.BitmapUtils;
 			import weave.utils.ColumnUtils;
@@ -71,9 +74,11 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			private var dataBounds:Bounds2D = new Bounds2D();
 			private var screenBounds:Bounds2D = new Bounds2D();
 			private var tempPoint:Point = new Point();
-			private var probedKeys:Array = [];
+			//private var probedKeys:Array = [];
 			
 			private var r:Number = 5;
+			
+			private const probeKeys:LinkableDynamicObject = registerLinkableChild(this, new LinkableDynamicObject(KeySet));
 			
 			override protected function createChildren():void{
 				super.createChildren();
@@ -84,6 +89,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				super.childrenCreated();
 				getCallbackCollection(this).addImmediateCallback(this, invalidateDisplayList);
 				canvas.addEventListener(MouseEvent.MOUSE_MOVE,mouseMove);
+				probeKeys.globalName = Weave.DEFAULT_PROBE_KEYSET;
 			}
 			
 			private function mouseMove(event:MouseEvent):void{
@@ -97,30 +103,43 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				var mouseY:Number = event.localY;
 				
 				var keys:Array = ColumnUtils.getAllKeys([xData,yData,cData]);
-				probedKeys = [];
-				for each(var key:IQualifiedKey in keys)
-				{
-					tempPoint.x = xData.getValueFromKey(key);
-					tempPoint.y = yData.getValueFromKey(key);
-					dataBounds.projectPointTo(tempPoint, screenBounds);
-					var recordX:Number = tempPoint.x;
-					var recordY:Number = tempPoint.y;
-					var dx:Number = recordX - mouseX;
-					var dy:Number = recordY - mouseY;
-					
-					trace('mouseX = '+mouseX+', recordX = '+recordX);
-					trace('mouseY = '+mouseY+', recordY = '+recordY);
-					
-					
-					if(dx*dx+dy*dy < r*r)
-						probedKeys.push(key);
-				}
-				var probedKeySet:KeySet = Weave.root.getObject(Weave.DEFAULT_PROBE_KEYSET) as KeySet;
-				probedKeySet.replaceKeys(probedKeys);
+				(probeKeys.internalObject as KeySet).clearKeys();
+				
+				var tempBounds:Bounds2D = new Bounds2D();
+				tempBounds.setCenteredRectangle(mouseX, mouseY, 10 ,10);
+				screenBounds.projectCoordsTo(tempBounds, dataBounds);
+				var probedKeys:Array = kdTree.queryRange(
+					[tempBounds.getXNumericMin(), tempBounds.getYNumericMin()],
+					[tempBounds.getXNumericMax(), tempBounds.getYNumericMax()]);
+				
+				var probedKeySet:KeySet = probeKeys.internalObject as KeySet;
+				if(probedKeySet)
+					probedKeySet.replaceKeys(probedKeys);
+				
+				//				for each(var key:IQualifiedKey in keys)
+				//				{
+				//					tempPoint.x = xData.getValueFromKey(key);
+				//					tempPoint.y = yData.getValueFromKey(key);
+				//					dataBounds.projectPointTo(tempPoint, screenBounds);
+				//					var recordX:Number = tempPoint.x;
+				//					var recordY:Number = tempPoint.y;
+				//					var dx:Number = recordX - mouseX;
+				//					var dy:Number = recordY - mouseY;
+				//					
+				//					trace('mouseX = '+mouseX+', recordX = '+recordX);
+				//					trace('mouseY = '+mouseY+', recordY = '+recordY);
+				//					
+				//					
+				//					if(dx*dx+dy*dy < r*r)
+				//						probedKeys.push(key);
+				//				}
+				//				var probedKeySet:KeySet = probeKeys.internalObject as KeySet;//Weave.root.getObject(Weave.DEFAULT_PROBE_KEYSET) as KeySet;
+				//				if(probedKeySet)
+				//					probedKeySet.replaceKeys(probedKeys);
 				invalidateDisplayList();
 				
 			}
-			
+			private var kdTree:KDTree = new KDTree(2);
 			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void{
 				super.updateDisplayList.apply(this,arguments);
 				
@@ -143,16 +162,24 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 					canvas.width - marginLeft - marginRight,
 					canvas.height - marginTop - marginBottom
 				);
+				
+				kdTree.clear();
 				for each(var key:IQualifiedKey in keys)
 				{
-					var x:Number = ColumnUtils.getNorm(xData,key);
-					var y:Number = ColumnUtils.getNorm(yData,key);
+					var x:Number = xData.getValueFromKey(key);
+					var y:Number = yData.getValueFromKey(key);
+					
+					kdTree.insert([x,y],key);
+					
+					x = ColumnUtils.getNorm(xData,key);
+					y = ColumnUtils.getNorm(yData,key);
 					var c:Number = ColumnUtils.getNorm(cData,key);
 					var cc:IAttributeColumn = (Weave.root.getObject(Weave.DEFAULT_COLOR_COLUMN) as IAttributeColumn);
 					var color:Number = cc.getValueFromKey(key,Number);
 					
-					if(probedKeys.indexOf(key) != -1)
-						color = 0xFF0000;
+					if(probeKeys)
+						if((probeKeys.internalObject as KeySet).containsKey(key))
+							color = 0xFF0000;
 					
 					var xScreen:Number = StandardLib.scale(x,0,1,marginLeft,canvas.width - marginRight);
 					var yScreen:Number = StandardLib.scale(y,1,0,marginTop,canvas.height - marginBottom);
