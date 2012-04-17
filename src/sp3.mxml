@@ -42,7 +42,6 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			import weave.primitives.Bounds2D;
 			import weave.primitives.ColorRamp;
 			import weave.utils.ColumnUtils;
-			WeaveAPI.registerImplementation(IVisTool, sp3);
 			
 			public const bottomPercent:LinkableNumber = registerLinkableChild(this, new LinkableNumber(20));
 			public const leftPercent:LinkableNumber = registerLinkableChild(this, new LinkableNumber(20));

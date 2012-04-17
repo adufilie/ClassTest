@@ -50,7 +50,6 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			import weave.utils.ColumnUtils;
 			import weave.utils.EquationColumnLib;
 			import weave.utils.PlotterUtils;
-			WeaveAPI.registerImplementation(IVisTool, sp12);
 			
 			public const xData:DynamicColumn = newLinkableChild(this,DynamicColumn);
 			public const yData:DynamicColumn = newLinkableChild(this,DynamicColumn);

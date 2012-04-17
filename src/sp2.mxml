@@ -38,7 +38,6 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			import weave.primitives.Bounds2D;
 			import weave.primitives.ColorRamp;
 			import weave.utils.ColumnUtils;
-			WeaveAPI.registerImplementation(IVisTool, sp2);
 			
 			public const xData:DynamicColumn = newLinkableChild(this, DynamicColumn);
 			public const yData:DynamicColumn = newLinkableChild(this, DynamicColumn);

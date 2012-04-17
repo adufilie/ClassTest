@@ -36,7 +36,6 @@
 			import weave.core.LinkableNumber;
 			import weave.data.AttributeColumns.DynamicColumn;
 			import weave.utils.ColumnUtils;
-			WeaveAPI.registerImplementation(IVisTool, sp9);
 			
 			public const xData:DynamicColumn = newLinkableChild(this, DynamicColumn);
 			public const yData:DynamicColumn = newLinkableChild(this, DynamicColumn);

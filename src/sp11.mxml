@@ -20,7 +20,6 @@
 			import weave.utils.BitmapUtils;
 			import weave.utils.ColumnUtils;
 			import weave.utils.PlotterUtils;
-			WeaveAPI.registerImplementation(IVisTool,sp11);
 			
 			public const xValues:DynamicColumn = newLinkableChild(this, DynamicColumn);
 			public const yValues:DynamicColumn = newLinkableChild(this, DynamicColumn);

@@ -37,7 +37,6 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			import weave.data.AttributeColumns.DynamicColumn;
 			import weave.data.StatisticsCache;
 			import weave.utils.ColumnUtils;
-			WeaveAPI.registerImplementation(IVisTool, sp5);
 			
 			public const xColumn:DynamicColumn = registerLinkableChild(this,new DynamicColumn());
 			public const yColumn:DynamicColumn = registerLinkableChild(this,new DynamicColumn());
