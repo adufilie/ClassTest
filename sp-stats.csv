@@ -1,0 +1,13 @@
+name,handles missing data,margins,tick marks,tick labels,colored by weave global color column,redraws when color ramp changes,probing with kd-tree,linked with Weave probing,optimized to reduce redundant computation,control panel / editor
+sp1,0,0,0,0,0,0,0,0,0,0
+sp2,0,0,0,0,1,0,0,0,0,0
+sp3,0,1,1,0,1,0,0,0,0,0
+sp4,0,0,0,0,0,0,0,0,0,0
+sp5,0,0,0,0,0,0,0,0,0,0
+sp6,0,1,1,0,1,1,1,0,0,0
+sp7,0,1,1,0,1,0,0,0,0,0
+sp8,0,1,1,1,1,1,0,0,0,0
+sp9,0,0,0,0,0,0,0,0,0,0
+sp10,0,1,1,0,1,0,0,0,0,0
+sp11,0,1,1,1,0,0,0,0,0,0
+sp12,0,1,1,1,1,0,1,1,0,0
