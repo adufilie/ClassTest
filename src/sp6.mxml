@@ -22,17 +22,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 <ui:DraggablePanel xmlns="weave.example.*" xmlns:mx="http://www.adobe.com/2006/mxml" xmlns:ui="weave.ui.*"
 				   implements="weave.api.ui.IVisTool">
 	<mx:VBox width="100%" height="100%">
-		<mx:Canvas width="100%" height="100%" id="canvas" mouseChildren="false" clipContent="true" mouseMove="canvas_mouseMoveHandler(event)"/>
-		<mx:HBox width="100%">
-			<mx:Label text="Point Size:"/>
-			<mx:HSlider width="100%" id="hs" liveDragging="true" minimum="1" maximum="20" 
-						showTrackHighlight="true" />
-		</mx:HBox>
-		<mx:HBox width="100%">
-			<mx:Label text="Tick Interval:"/>
-			<mx:HSlider width="100%" id="ts" liveDragging="true" minimum="4" maximum="20" tickInterval="1"  
-						showTrackHighlight="true" />
-		</mx:HBox>
+		<mx:Canvas width="100%" height="100%" id="canvas" mouseChildren="false" clipContent="true" mouseMove="mouseMoveHandler(event)"/>
 	</mx:VBox>
 	<mx:Script>
 		<![CDATA[
@@ -50,12 +40,15 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			import weave.api.ui.IVisTool;
 			import weave.compiler.StandardLib;
 			import weave.core.LinkableBoolean;
+			import weave.core.LinkableDynamicObject;
 			import weave.core.LinkableNumber;
 			import weave.data.AttributeColumns.DynamicColumn;
+			import weave.data.KeySets.KeySet;
 			import weave.primitives.Bounds2D;
+			import weave.primitives.KDTree;
 			import weave.utils.BitmapText;
 			import weave.utils.ColumnUtils;
-			
+			import weave.utils.PlotterUtils;
 			public const xData:DynamicColumn = newLinkableChild(this,DynamicColumn);
 			public const yData:DynamicColumn = newLinkableChild(this,DynamicColumn);
 			public const colorCol:IAttributeColumn = Weave.root.getObject(Weave.DEFAULT_COLOR_COLUMN) as IAttributeColumn;
@@ -65,6 +58,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			public const bottomMargin:LinkableNumber = registerLinkableChild(this,new LinkableNumber(5));
 			public const radius:LinkableNumber = registerLinkableChild(this,new LinkableNumber(5));
 			public const tickIntervals:LinkableNumber = registerLinkableChild(this,new LinkableNumber(5));
+			public const probeKeys:LinkableDynamicObject = registerLinkableChild(this,new LinkableDynamicObject(KeySet));
 			private var dataHolder:Dictionary = new Dictionary();
 			private function updateContainer():void{
 				var xCount:Number = WeaveAPI.StatisticsCache.getCount(xData);
@@ -80,78 +74,99 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				getCallbackCollection(colorCol).addImmediateCallback(this,invalidateDisplayList);
 				linkBindableProperty(radius,hs,"value");
 				linkBindableProperty(tickIntervals,ts,"value");
+				probeKeys.globalName = Weave.DEFAULT_PROBE_KEYSET;
+				xSel.dynamicObject = xData;
+				ySel.dynamicObject = yData;
 				//canvas.rawChildren.addChild(bitMap);
 			}
 			private var bitMap:Bitmap = new Bitmap(new BitmapData(500,500,true));
 			private var bitmapText:BitmapText = new BitmapText();
 			private var screenBounds:Bounds2D = new Bounds2D();
 			private var dataBounds:Bounds2D = new Bounds2D();
+			private var _kdIndex:int;
+			private var _kdKeys:Array;
+			// one iteration
+			//iteration seperated for Asynchrnous task , by adding to Flash Enter frame event, which fires as far as
+			// Application runs
+			private function fillKDtree():Number{
+				if(_kdKeys.length == 0)
+					return 1;
+				var key:IQualifiedKey = _kdKeys[_kdIndex];
+				var ptX:Number = xData.getValueFromKey(key);
+				var ptY:Number = yData.getValueFromKey(key);
+				kdTree.insert([ptX,ptY],key);
+				_kdIndex++;
+				return _kdIndex/_kdKeys.length;
+			}
+			private var kdTree:KDTree = new KDTree(2);
 			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void{
+				var keys:Array;
 				super.updateDisplayList.apply(this,arguments);
 				if(isNaN(radius.value)){
 					//During close event radius.value becomes NaN 
 					trace();
 				}else{
 					if(xData.keys.length >0 || yData.keys.length > 0){
-						//Issues:
-						//maximize event not updating properly - delays its updating
-						// session history - updates delays
-						/*  if(detectLinkableObjectChange(updateDisplayList,panelWidth)||
-						detectLinkableObjectChange(updateDisplayList,panelHeight)||
-						detectLinkableObjectChange(updateDisplayList,panelX)||
-						detectLinkableObjectChange(updateDisplayList,panelY)||
-						detectLinkableObjectChange(updateDisplayList,maximized)||
-						detectLinkableObjectChange(updateDisplayList,radius)||
-						detectLinkableObjectChange(updateDisplayList,tickIntervals) || closestKey)
-						{  */
-						var keys:Array = ColumnUtils.getAllKeys([xData,yData,colorCol]);
-						var xMin:Number = WeaveAPI.StatisticsCache.getMin(xData);
-						var xMax:Number = WeaveAPI.StatisticsCache.getMax(xData);
-						var yMin:Number = WeaveAPI.StatisticsCache.getMin(yData);
-						var yMax:Number = WeaveAPI.StatisticsCache.getMax(yData);
-						dataBounds = new Bounds2D(xMin,yMin,xMax,yMax);
-						screenBounds = new Bounds2D(0,this.canvas.height,this.canvas.width,0);
-						screenBounds.xMin = leftMargin.value/100 * canvas.width;
-						screenBounds.xMax = canvas.width - (rightMargin.value/100 * canvas.width);
-						screenBounds.yMin = canvas.height - (bottomMargin.value/100 * canvas.height);
-						screenBounds.yMax = topMargin.value/100 * canvas.height;
-						canvas.graphics.clear();
-						canvas.graphics.lineStyle(1,0,1);
-						canvas.graphics.moveTo(screenBounds.xMin,screenBounds.yMin);
-						canvas.graphics.lineTo(screenBounds.xMax,screenBounds.yMin);
-						canvas.graphics.lineTo(screenBounds.xMax,screenBounds.yMax);
-						canvas.graphics.lineTo(screenBounds.xMin,screenBounds.yMax);
-						canvas.graphics.lineTo(screenBounds.xMin,screenBounds.yMin);
-						drawTicks(screenBounds,dataBounds);
-						var pt:Point = new Point();
-						var col:Number;
-						for each(var key:IQualifiedKey in keys){
-							var xVal:Number = xData.getValueFromKey(key,Number);
-							var yVal:Number =  yData.getValueFromKey(key,Number);
-							pt.x= xVal;
-							pt.y = yVal;
-							col = colorCol.getValueFromKey(key,Number);
-							dataBounds.projectPointTo(pt,screenBounds);
-							canvas.graphics.lineStyle(1,0,0.5);
-							if(closestKey == key && closestDist < 10){
-								canvas.graphics.beginFill(0xff0000,1.0);
-								probeLabel.x = mouseX;
-								probeLabel.y = mouseY;
-								probeLabel.text = "X:" + xVal + " || Y:" + yVal;
-								canvas.addChild(probeLabel);
+						if(detectLinkableObjectChange(updateDisplayList,
+							panelWidth,panelHeight,radius,tickIntervals,
+							xData,yData,probeKeys))
+						{  
+							keys = ColumnUtils.getAllKeys([xData,yData,colorCol]);
+							if(detectLinkableObjectChange(kdTree,xData,yData)){
+								kdTree.clear();
+								_kdIndex = 0;
+								_kdKeys = keys;
+								WeaveAPI.StageUtils.startTask(this,fillKDtree,WeaveAPI.TASK_PRIORITY_BUILDING);
 							}
-							else{
-								if( closestDist >= 10 ){
-									if(probeLabel.parent == canvas ){
-										canvas.removeChild(probeLabel);
+							var xMin:Number = WeaveAPI.StatisticsCache.getMin(xData);
+							var xMax:Number = WeaveAPI.StatisticsCache.getMax(xData);
+							var yMin:Number = WeaveAPI.StatisticsCache.getMin(yData);
+							var yMax:Number = WeaveAPI.StatisticsCache.getMax(yData);
+							dataBounds = new Bounds2D(xMin,yMin,xMax,yMax);
+							screenBounds = new Bounds2D(0,this.canvas.height,this.canvas.width,0);
+							screenBounds.xMin = leftMargin.value/100 * canvas.width;
+							screenBounds.xMax = canvas.width - (rightMargin.value/100 * canvas.width);
+							screenBounds.yMin = canvas.height - (bottomMargin.value/100 * canvas.height);
+							screenBounds.yMax = topMargin.value/100 * canvas.height;
+							canvas.graphics.clear();
+							canvas.graphics.lineStyle(1,0,1);
+							canvas.graphics.moveTo(screenBounds.xMin,screenBounds.yMin);
+							canvas.graphics.lineTo(screenBounds.xMax,screenBounds.yMin);
+							canvas.graphics.lineTo(screenBounds.xMax,screenBounds.yMax);
+							canvas.graphics.lineTo(screenBounds.xMin,screenBounds.yMax);
+							canvas.graphics.lineTo(screenBounds.xMin,screenBounds.yMin);
+							drawTicks(screenBounds,dataBounds);
+							var pt:Point = new Point();
+							var col:Number;
+							for each(var key:IQualifiedKey in keys){
+								var xVal:Number = xData.getValueFromKey(key,Number);
+								var yVal:Number =  yData.getValueFromKey(key,Number);
+								pt.x= xVal;
+								pt.y = yVal;
+								col = colorCol.getValueFromKey(key,Number);
+								dataBounds.projectPointTo(pt,screenBounds);
+								canvas.graphics.lineStyle(1,0,0.5);
+								if(probeKeys){
+									if((probeKeys.internalObject as KeySet).containsKey(key)){
+										canvas.graphics.beginFill(0xff0000,1.0);
+										probeLabel.x = mouseX;
+										probeLabel.y = mouseY;
+										probeLabel.text = "X:" + xVal + " || Y:" + yVal;
+										canvas.addChild(probeLabel);
+									}
+									else{
+										canvas.graphics.beginFill(col,1.0);
+										if(probeLabel.parent == canvas ){
+											canvas.removeChild(probeLabel);
+										} 
 									} 
+								}else{
+									canvas.graphics.beginFill(col,1.0);
 								}
-								canvas.graphics.beginFill(col,1.0);
+								canvas.graphics.drawCircle(pt.x,pt.y,radius.value);
+								canvas.graphics.endFill();
 							}
-							canvas.graphics.drawCircle(pt.x,pt.y,radius.value);
-							canvas.graphics.endFill();
 						}
-						//}
 					}
 				}
 			}
@@ -198,6 +213,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				stagePt.y = event.stageY;
 				stagePt = canvas.globalToLocal(stagePt);
 				var keys:Array = ColumnUtils.getAllKeys([xData,yData,colorCol]);
+				(probeKeys.internalObject as KeySet).clearKeys();
 				for each( var key:IQualifiedKey in keys){
 					var xColdata:Number = xData.getValueFromKey(key,Number);
 					var yColdata:Number = yData.getValueFromKey(key,Number);
@@ -207,15 +223,49 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 					var dist:Number = recordPt.subtract(stagePt).length;
 					if(dist < closestDist){
 						closestKey = key;
+						(probeKeys.internalObject as KeySet).addKeys([key]);
 						closestDist = dist
 					}
 					else{
 						//closestKey = null
 					} 
 					trace("closest",closestDist,closestKey.localName);;
-					invalidateDisplayList();
+					//invalidateDisplayList();
 				}
+			}
+			protected function mouseMoveHandler(event:MouseEvent):void
+			{
+				var mouseX:Number = event.localX;
+				var mouseY:Number = event.localY;
+				var keys:Array = ColumnUtils.getAllKeys([xData,yData,colorCol]);
+				var tempBounds:Bounds2D = new Bounds2D();
+				tempBounds.setCenteredRectangle(mouseX,mouseY,10,10);
+				screenBounds.projectCoordsTo(tempBounds,dataBounds);
+				var probedKeys:Array = kdTree.queryRange(
+					[tempBounds.getXNumericMin(),tempBounds.getYNumericMin()],
+					[tempBounds.getXNumericMax(),tempBounds.getYNumericMax()]);
+				var probedKeySet:KeySet = probeKeys.internalObject as KeySet;
+				if(probedKeySet)
+					probedKeySet.replaceKeys(probedKeys);
 			}
 		]]>
 	</mx:Script>
+	<ui:ControlPanel>
+		<mx:VBox label="Data">
+			<ui:DynamicColumnComponent id="xSel" label ="X" />
+			<ui:DynamicColumnComponent id="ySel" label ="Y" />
+		</mx:VBox>
+		<mx:VBox label="properties">
+			<mx:HBox width="100%">
+				<mx:Label text="Point Size:"/>
+				<mx:HSlider width="100%" id="hs" liveDragging="true" minimum="1" maximum="20" 
+							showTrackHighlight="true" />
+			</mx:HBox>
+			<mx:HBox width="100%">
+				<mx:Label text="Tick Interval:"/>
+				<mx:HSlider width="100%" id="ts" liveDragging="true" minimum="4" maximum="20" tickInterval="1"  
+							showTrackHighlight="true" />
+			</mx:HBox>
+		</mx:VBox>
+	</ui:ControlPanel>
 </ui:DraggablePanel>
