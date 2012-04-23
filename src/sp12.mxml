@@ -20,17 +20,19 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 */
 -->
 <ui:DraggablePanel xmlns="weave.example.*" xmlns:mx="http://www.adobe.com/2006/mxml" xmlns:ui="weave.ui.*"
-				   implements="weave.api.ui.IVisTool">
+				   implements="weave.api.ui.IVisTool, weave.api.ui.IVisToolWithSelectableAttributes">
 	<mx:Canvas id="canvas" width="100%" height="100%" />
 	<mx:Script>
 		<![CDATA[
 			import mx.controls.Alert;
+			import mx.events.ResizeEvent;
 			
 			import weave.Weave;
 			import weave.api.WeaveAPI;
 			import weave.api.data.IAttributeColumn;
 			import weave.api.data.IKeySet;
 			import weave.api.data.IQualifiedKey;
+			import weave.api.detectLinkableObjectChange;
 			import weave.api.getCallbackCollection;
 			import weave.api.newLinkableChild;
 			import weave.api.registerLinkableChild;
@@ -79,6 +81,10 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			
 			private const probeKeys:LinkableDynamicObject = registerLinkableChild(this, new LinkableDynamicObject(KeySet));
 			
+			private var kdTree:KDTree = new KDTree(2);
+			
+			private var _sizeChanged:Boolean = true;
+			
 			override protected function createChildren():void{
 				super.createChildren();
 				canvas.rawChildren.addChild(bitmap);
@@ -89,6 +95,18 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				getCallbackCollection(this).addImmediateCallback(this, invalidateDisplayList);
 				canvas.addEventListener(MouseEvent.MOUSE_MOVE,mouseMove);
 				probeKeys.globalName = Weave.DEFAULT_PROBE_KEYSET;
+				
+				canvas.addEventListener(ResizeEvent.RESIZE,function(){
+					_sizeChanged = true;
+				});
+			}
+			
+			public function getSelectableAttributeNames():Array{
+				return ['x','y','color'];
+			}
+			
+			public function getSelectableAttributes():Array{
+				return [xData,yData,cData];
 			}
 			
 			private function mouseMove(event:MouseEvent):void{
@@ -102,7 +120,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				var mouseY:Number = event.localY;
 				
 				var keys:Array = ColumnUtils.getAllKeys([xData,yData,cData]);
-				(probeKeys.internalObject as KeySet).clearKeys();
+				//(probeKeys.internalObject as KeySet).clearKeys();
 				
 				var tempBounds:Bounds2D = new Bounds2D();
 				tempBounds.setCenteredRectangle(mouseX, mouseY, 10 ,10);
@@ -138,59 +156,84 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				invalidateDisplayList();
 				
 			}
-			private var kdTree:KDTree = new KDTree(2);
+			
 			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void{
 				super.updateDisplayList.apply(this,arguments);
 				
-				var xMin:Number = WeaveAPI.StatisticsCache.getMin(xData);
-				var xMax:Number = WeaveAPI.StatisticsCache.getMax(xData);
-				var yMin:Number = WeaveAPI.StatisticsCache.getMin(yData);
-				var yMax:Number = WeaveAPI.StatisticsCache.getMax(yData);
 				
-				dataBounds.setBounds(xMin, yMin, xMax, yMax);
+				var shouldDraw:Boolean = false;
 				
-				screenBounds.setXRange(marginLeft, canvas.width - marginRight);
-				screenBounds.setYRange(canvas.height - marginBottom, marginTop);
-				
-				
-				var keys:Array = ColumnUtils.getAllKeys([xData,yData,cData]);
-				
-				canvas.graphics.clear();
-				canvas.graphics.lineStyle(1,0x000000);
-				canvas.graphics.drawRect(marginLeft,marginTop,
-					canvas.width - marginLeft - marginRight,
-					canvas.height - marginTop - marginBottom
-				);
-				
-				kdTree.clear();
-				for each(var key:IQualifiedKey in keys)
-				{
-					var x:Number = xData.getValueFromKey(key);
-					var y:Number = yData.getValueFromKey(key);
-					
-					kdTree.insert([x,y],key);
-					
-					x = ColumnUtils.getNorm(xData,key);
-					y = ColumnUtils.getNorm(yData,key);
-					var c:Number = ColumnUtils.getNorm(cData,key);
-					var cc:IAttributeColumn = (Weave.root.getObject(Weave.DEFAULT_COLOR_COLUMN) as IAttributeColumn);
-					var color:Number = cc.getValueFromKey(key,Number);
-					
-					if(probeKeys)
-						if((probeKeys.internalObject as KeySet).containsKey(key))
-							color = 0xFF0000;
-					
-					var xScreen:Number = StandardLib.scale(x,0,1,marginLeft,canvas.width - marginRight);
-					var yScreen:Number = StandardLib.scale(y,1,0,marginTop,canvas.height - marginBottom);
-					
-					canvas.graphics.beginFill(color);
-					canvas.graphics.drawCircle(xScreen,yScreen,r);
+				if(_sizeChanged){
+					shouldDraw = true;
+					_sizeChanged = false;
 				}
 				
-				bitmap.bitmapData.fillRect(bitmap.bitmapData.rect,0x00000000);
-				PlotterUtils.setBitmapDataSize(bitmap,canvas.width, canvas.height);
-				drawTickMarks(xData, X_AXIS);
-				drawTickMarks(yData, Y_AXIS);
+				if(detectLinkableObjectChange(updateDisplayList,xData, yData, cData, probeKeys, colorRamp))
+					shouldDraw = true;
+				
+				if(shouldDraw){
+					
+					var xMin:Number = WeaveAPI.StatisticsCache.getMin(xData);
+					var xMax:Number = WeaveAPI.StatisticsCache.getMax(xData);
+					var yMin:Number = WeaveAPI.StatisticsCache.getMin(yData);
+					var yMax:Number = WeaveAPI.StatisticsCache.getMax(yData);
+					
+					dataBounds.setBounds(xMin, yMin, xMax, yMax);
+					
+					screenBounds.setXRange(marginLeft, canvas.width - marginRight);
+					screenBounds.setYRange(canvas.height - marginBottom, marginTop);
+					
+					var keys:Array = ColumnUtils.getAllKeys([xData,yData,cData]);
+					
+					canvas.graphics.clear();
+					canvas.graphics.lineStyle(1,0x000000);
+					canvas.graphics.drawRect(marginLeft,marginTop,
+						canvas.width - marginLeft - marginRight,
+						canvas.height - marginTop - marginBottom
+					);
+					
+					if(detectLinkableObjectChange(kdTree, xData, yData)){
+						kdTree.clear();
+						for each(var key:IQualifiedKey in keys)
+						{
+							var x:Number = xData.getValueFromKey(key);
+							var y:Number = yData.getValueFromKey(key);
+							
+							kdTree.insert([x,y],key);
+						}
+					}
+					for each(var key:IQualifiedKey in keys)
+					{
+						var x:Number = xData.getValueFromKey(key);
+						var y:Number = yData.getValueFromKey(key);
+						
+						x = ColumnUtils.getNorm(xData,key);
+						y = ColumnUtils.getNorm(yData,key);
+						var c:Number = ColumnUtils.getNorm(cData,key);
+						var cc:IAttributeColumn = (Weave.root.getObject(Weave.DEFAULT_COLOR_COLUMN) as IAttributeColumn);
+						var color:Number = cc.getValueFromKey(key,Number);
+						
+						if(probeKeys)
+							if((probeKeys.internalObject as KeySet).containsKey(key))
+								color = 0xFF0000;
+						
+						var xScreen:Number = StandardLib.scale(x,0,1,marginLeft,canvas.width - marginRight);
+						var yScreen:Number = StandardLib.scale(y,1,0,marginTop,canvas.height - marginBottom);
+						
+						if(isNaN(xScreen))
+							xScreen = screenBounds.xMax + 5;
+						if(isNaN(yScreen))
+							yScreen = screenBounds.yMax + 5;
+						
+						canvas.graphics.beginFill(color);
+						canvas.graphics.drawCircle(xScreen,yScreen,r);
+					}
+					
+					bitmap.bitmapData.fillRect(bitmap.bitmapData.rect,0x00000000);
+					PlotterUtils.setBitmapDataSize(bitmap,canvas.width, canvas.height);
+					drawTickMarks(xData, X_AXIS);
+					drawTickMarks(yData, Y_AXIS);
+				}
 			}
 			// axis in {X_AXIS, Y_AXIS}
 			private function drawTickMarks(column:DynamicColumn,axis:uint):void{
@@ -245,11 +288,10 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 		]]>
 	</mx:Script>
 	<ui:ControlPanel>
-		<mx:VBox>
-			<mx:Label text="Example control panel"/>
-		</mx:VBox>
-		<mx:VBox>
-			<mx:Label text="Second tab of example control panel"/>
+		<mx:VBox label="Basic">
+			<ui:DynamicColumnComponent visTool="{this}" label="X" dynamicObject="{xData}" />
+			<ui:DynamicColumnComponent visTool="{this}" label="Y" dynamicObject="{yData}" />
+			<ui:DynamicColumnComponent visTool="{this}" label="Color" dynamicObject="{cData}" />
 		</mx:VBox>
 	</ui:ControlPanel>
 </ui:DraggablePanel>
